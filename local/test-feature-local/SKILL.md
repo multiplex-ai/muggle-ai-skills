@@ -10,11 +10,15 @@ Test a feature on a local web application using Muggle AI local MCP tools.
 ## Workflow Overview
 
 ```
+Login (required) → Authenticate with Muggle AI
+      ↓
+List Sources (merged) → Present unified local+cloud projects
+      ↓
+Select Project → User chooses project
+      ↓
+Sync Local Copy → Pull latest from cloud if both exist
+      ↓
 Analyze Changes (optional) → Identify impacted features
-      ↓
-List Sources (Local + Cloud) → Select or Create Project
-      ↓
-Pull from Cloud (if selected) → Rewrite URL to localhost
       ↓
 List Use Cases → Find/Create/Pull Use Case(s)
       ↓
@@ -28,9 +32,88 @@ List Test Scripts → Generate (if none) or Replay (if exists)
 - Local MCP server running
 - Target web application running (e.g., `http://localhost:3999`)
 - User describes the feature to test OR has code changes to analyze
-- For cloud pull: Muggle AI authentication (optional)
 
-## Step 0: Analyze Current Changes (Optional but Recommended)
+## Step 0: Login (Required)
+
+**Always start by ensuring the user is authenticated.** This is mandatory before any testing can begin.
+
+### Check Authentication Status
+
+Call `muggle_auth_status` to check if user is already logged in.
+
+### If Not Authenticated
+
+1. Inform user: "You need to log in to Muggle AI to start testing."
+2. Call `muggle_auth_login` to initiate the login flow
+3. Wait for authentication to complete
+4. Confirm: "Logged in as [email]. Ready to proceed."
+
+### If Already Authenticated
+
+Confirm: "Already logged in as [email]. Let's continue."
+
+**Important:** Do NOT proceed to any other steps until authentication is confirmed.
+
+## Step 1: List All Sources (Local + Cloud)
+
+**Always present both local and cloud projects for the user to choose from, with matching projects merged.**
+
+### List Both Sources
+
+1. Call `muggle_project_list` to see existing local projects
+2. Call `muggle_cloud_project_list` to list cloud projects
+
+### Merge Matching Projects
+
+Projects are considered matching when:
+- Local project has `cloudSource.projectId` matching a cloud project ID
+- OR local project name matches cloud project name (case-insensitive)
+
+### Present Unified List
+
+Present projects in a merged format - matching local/cloud projects appear as ONE entry:
+
+```
+Logged in as: user@example.com
+
+PROJECTS:
+| # | Name | Local | Cloud | Local URL |
+|---|------|-------|-------|-----------|
+| 1 | MuggleTest Staging | Yes | Yes | http://localhost:3999 |
+| 2 | Admin Portal | No | Yes | - |
+| 3 | My Local App | Yes | No | http://localhost:3000 |
+
+Options:
+  - Enter a number to use that project
+  - Type "new" to create a new project
+```
+
+**Column meanings:**
+- **Local**: "Yes" if local copy exists
+- **Cloud**: "Yes" if cloud version exists
+- **Local URL**: The localhost URL for testing (or "-" if needs to be set)
+
+### User Selection Logic
+
+| Selection | Local? | Cloud? | Action |
+| :-------- | :----- | :----- | :----- |
+| Number | Yes | Yes | **Sync first**: Pull latest from cloud, then use local |
+| Number | Yes | No | Use existing local project |
+| Number | No | Yes | Prompt for localhost URL, pull to local |
+| "new" | - | - | Create new local project |
+
+### Sync Before Testing (Critical)
+
+**When a project has both local AND cloud versions, always sync before testing:**
+
+1. Inform user: "Syncing local copy with cloud..."
+2. Call `muggle_cloud_pull_project` with the cloud project ID and existing local URL
+3. This updates use cases and test cases to match cloud
+4. Confirm: "Local copy synced. Ready to test."
+
+**Important:** Always wait for user to select a project before proceeding.
+
+## Step 2: Analyze Current Changes (Optional but Recommended)
 
 When user asks to "test my changes" or doesn't specify a feature, analyze the codebase changes first.
 
@@ -84,55 +167,7 @@ Based on your changes:
 Which test(s) would you like to run?
 ```
 
-## Step 1: List All Sources (Local + Cloud)
-
-Present test artifacts from both local storage and cloud (if authenticated).
-
-### List Local Projects
-
-Call `muggle_project_list` to see existing local projects.
-
-### Check Cloud Access (Optional)
-
-Call `muggle_auth_status` to check if user is authenticated.
-
-**If authenticated:**
-- Call `muggle_cloud_project_list` to list cloud projects
-- Combine with local projects in the presentation
-
-### Present Combined List
-
-```
-Available test projects:
-
-LOCAL:
-  1. [LOCAL] proj_abc - "My Web App" (http://localhost:3000)
-     - 3 use cases, 8 test cases
-  2. [LOCAL] proj_def - "Admin Portal" (http://localhost:4000)
-     - 2 use cases, 4 test cases
-
-CLOUD (logged in as user@example.com):
-  3. [CLOUD] cloud_proj_123 - "My Web App" (https://app.example.com)
-     - 5 use cases, 12 test cases
-  4. [CLOUD] cloud_proj_456 - "Marketing Site" (https://www.example.com)
-     - 3 use cases, 6 test cases
-
-Options:
-  - Select a number to use that project
-  - Type "new" to create a new project
-  - Type "pull 3" to pull cloud project #3 to local
-```
-
-### User Selection Logic
-
-| User Input | Action |
-| :--------- | :----- |
-| Number (local) | Use existing local project |
-| Number (cloud) | Prompt for localhost URL, then pull to local |
-| "new" | Create new local project |
-| "pull N" | Pull cloud project N to local |
-
-## Step 2: Pull from Cloud (If Selected)
+## Step 3: Pull from Cloud (If Selected)
 
 When user selects a cloud project, use case, or test case:
 
@@ -175,7 +210,7 @@ Call `muggle_cloud_pull_project` with:
 - `https://app.example.com/dashboard` → `http://localhost:3000/dashboard`
 - `https://app.example.com/users/123` → `http://localhost:3000/users/123`
 
-## Step 3: Identify or Create Project
+## Step 4: Identify or Create Project
 
 If not pulling from cloud, find or create a local project.
 
@@ -192,7 +227,7 @@ Call `muggle_project_list` to see existing projects.
 - `url`: The localhost URL
 - `description`: Brief description of the app
 
-## Step 4: Identify or Create Use Case(s)
+## Step 5: Identify or Create Use Case(s)
 
 Call `muggle_use_case_list` with the `projectId`.
 
@@ -221,7 +256,7 @@ Call `muggle_use_case_list` with the `projectId`.
 }
 ```
 
-## Step 5: Identify or Create Test Case(s)
+## Step 6: Identify or Create Test Case(s)
 
 Call `muggle_test_case_list` with `projectId` and optionally `useCaseId`.
 
@@ -270,7 +305,7 @@ Run: [all impacted] [all] [select specific]?
 }
 ```
 
-## Step 6: Generate or Replay Test Script(s)
+## Step 7: Generate or Replay Test Script(s)
 
 For each selected test case, call `muggle_test_script_list` with `projectId` and `testCaseId`.
 
@@ -323,7 +358,7 @@ When running multiple tests:
 2. **Generate new scripts after** (slower, may need user observation)
 3. Track results for each test case
 
-## Step 7: View Results
+## Step 8: View Results
 
 After execution, call `muggle_run_result_list` or `muggle_run_result_get` to show:
 - Pass/fail status
@@ -366,65 +401,84 @@ Based on results:
 
 ## Example Interactions
 
-### Example 1: Test with Cloud Pull
+### Example 1: Test with Existing Synced Project
 
 **User:** "Test the login feature at localhost:3999"
 
 **Agent:**
-1. `muggle_project_list` → Found 1 local project
-2. `muggle_auth_status` → Authenticated
-3. `muggle_cloud_project_list` → Found 2 cloud projects
-4. Present: "Found projects:
-   - [LOCAL] proj_abc - My App (localhost:3000)
-   - [CLOUD] cloud_123 - My App (https://app.example.com)
-   Which to use?"
-5. User: "pull the cloud one"
-6. Ask: "What localhost URL for testing?" → User: "http://localhost:3999"
-7. `muggle_cloud_pull_project` → Creates local copy with localhost URL
-8. `muggle_use_case_list` → Found "User Authentication"
-9. `muggle_test_case_list` → Found 3 test cases
-10. Run tests against localhost:3999
+1. `muggle_auth_status` → Not authenticated
+2. `muggle_auth_login` → User completes login
+3. Confirm: "Logged in as user@example.com"
+4. `muggle_project_list` → Found 1 local project (MuggleTest Staging)
+5. `muggle_cloud_project_list` → Found cloud project with same name
+6. Present merged list:
+   ```
+   | # | Name | Local | Cloud | Local URL |
+   |---|------|-------|-------|-----------|
+   | 1 | MuggleTest Staging | Yes | Yes | http://localhost:3999 |
+   | 2 | Other App | No | Yes | - |
+   ```
+7. User: "1"
+8. **Sync**: "Syncing local copy with cloud..."
+9. `muggle_cloud_pull_project` → Updates local with latest from cloud
+10. Confirm: "Local copy synced. Ready to test."
+11. `muggle_use_case_list` → Found "User Authentication"
+12. `muggle_test_case_list` → Found 3 test cases
+13. Run tests against localhost:3999
 
 ### Example 2: Test Based on Code Changes
 
 **User:** "Test my changes"
 
 **Agent:**
-1. `git status` → Modified: LoginForm.tsx, AuthService.ts
-2. `git diff` → Analyze changes (added error handling, updated validation)
-3. `muggle_project_list` → Found "My App" for localhost:3000
-4. `muggle_use_case_list` → Found 5 use cases
-5. Present: "Your changes affect authentication. Found 2 related use cases:
-   - User Authentication (3 test cases)
-   - Password Reset (2 test cases)
-   Which to test?"
-6. User: "all"
-7. `muggle_test_case_list` → 5 test cases total
-8. `muggle_test_script_list` for each → 4 have scripts, 1 doesn't
-9. Present execution plan, user confirms
-10. Run 4 replays, 1 generation
-11. Report summary: "4 passed, 1 new script generated"
+1. `muggle_auth_status` → Authenticated as user@example.com
+2. Confirm: "Already logged in. Let's continue."
+3. `muggle_project_list` → Found 1 local project
+4. `muggle_cloud_project_list` → Found 3 cloud projects
+5. Present combined list: "Which project to use?"
+6. User: "1" (selects local project)
+7. `git status` → Modified: LoginForm.tsx, AuthService.ts
+8. `git diff` → Analyze changes (added error handling, updated validation)
+9. `muggle_use_case_list` → Found 5 use cases
+10. Present: "Your changes affect authentication. Found 2 related use cases:
+    - User Authentication (3 test cases)
+    - Password Reset (2 test cases)
+    Which to test?"
+11. User: "all"
+12. `muggle_test_case_list` → 5 test cases total
+13. `muggle_test_script_list` for each → 4 have scripts, 1 doesn't
+14. Present execution plan, user confirms
+15. Run 4 replays, 1 generation
+16. Report summary: "4 passed, 1 new script generated"
 
 ### Example 3: Create New Test
 
 **User:** "Test the login flow on my app at localhost:3000"
 
 **Agent:**
-1. `muggle_project_list` → No match for localhost:3000
-2. `muggle_project_create` with name "Local App", url "http://localhost:3000"
-3. `muggle_use_case_save` with goal "User can log in to the application"
-4. `muggle_test_case_save` with login test details
-5. `muggle_test_script_list` → Empty
-6. `muggle_execute_test_generation` → Generates script
-7. Report: "Test script generated with 5 steps. Ready to replay."
+1. `muggle_auth_status` → Not authenticated
+2. `muggle_auth_login` → User completes login
+3. Confirm: "Logged in as user@example.com"
+4. `muggle_project_list` → No local projects
+5. `muggle_cloud_project_list` → Found 1 cloud project (different app)
+6. Present list: "No matching projects found. Create new?"
+7. User: "new"
+8. `muggle_project_create` with name "Local App", url "http://localhost:3000"
+9. `muggle_use_case_save` with goal "User can log in to the application"
+10. `muggle_test_case_save` with login test details
+11. `muggle_test_script_list` → Empty
+12. `muggle_execute_test_generation` → Generates script
+13. Report: "Test script generated with 5 steps. Ready to replay."
 
 ## Quick Reference
 
 | Action | Tool/Command |
 | :----- | :----------- |
-| Analyze changes | `git status`, `git diff` |
+| Check auth status | `muggle_auth_status` |
+| Login | `muggle_auth_login` |
 | List local projects | `muggle_project_list` |
 | List cloud projects | `muggle_cloud_project_list` |
+| Analyze changes | `git status`, `git diff` |
 | Pull project from cloud | `muggle_cloud_pull_project` |
 | Pull use case from cloud | `muggle_cloud_pull_use_case` |
 | Pull test case from cloud | `muggle_cloud_pull_test_case` |
@@ -441,7 +495,10 @@ Based on results:
 
 ## Notes
 
-- **Dual source:** Check both local storage and cloud for existing test artifacts.
+- **Login required:** Always authenticate the user first before any testing operations.
+- **Project selection required:** Always list both local and cloud projects, and wait for user to select one.
+- **Merge matching projects:** Local and cloud projects with the same name should appear as ONE entry.
+- **Sync before testing:** When a project has both local and cloud versions, always pull latest from cloud before testing.
 - **URL rewriting:** When pulling from cloud, rewrite URLs to localhost and store original URL.
 - **Change-aware:** When user says "test my changes", analyze git diff to identify impacted tests.
 - **Batch execution:** Can run multiple tests in sequence, with summary report.
