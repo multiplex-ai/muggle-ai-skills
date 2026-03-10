@@ -1,6 +1,6 @@
 ---
 name: test-feature-local
-description: Test a feature locally using Muggle AI local MCP. Handles the full flow of listing/creating projects, use cases, and test cases, then generates or replays test scripts. Use when the user asks to test a feature, test a user flow, or run local tests against localhost applications.
+description: Test a feature locally using Muggle AI local MCP. Handles the full flow of listing/creating projects, use cases, and test cases, then generates or replays test scripts. Supports pulling test artifacts from cloud and rewriting URLs for local testing.
 ---
 
 # Test Feature Locally
@@ -12,11 +12,13 @@ Test a feature on a local web application using Muggle AI local MCP tools.
 ```
 Analyze Changes (optional) → Identify impacted features
       ↓
-List Projects → Find/Create Project
+List Sources (Local + Cloud) → Select or Create Project
       ↓
-List Use Cases → Find/Create Use Case(s)
+Pull from Cloud (if selected) → Rewrite URL to localhost
       ↓
-List Test Cases → Find/Create Test Case(s)
+List Use Cases → Find/Create/Pull Use Case(s)
+      ↓
+List Test Cases → Find/Create/Pull Test Case(s)
       ↓
 List Test Scripts → Generate (if none) or Replay (if exists)
 ```
@@ -26,6 +28,7 @@ List Test Scripts → Generate (if none) or Replay (if exists)
 - Local MCP server running
 - Target web application running (e.g., `http://localhost:3999`)
 - User describes the feature to test OR has code changes to analyze
+- For cloud pull: Muggle AI authentication (optional)
 
 ## Step 0: Analyze Current Changes (Optional but Recommended)
 
@@ -36,16 +39,9 @@ When user asks to "test my changes" or doesn't specify a feature, analyze the co
 Run these commands to understand what changed:
 
 ```bash
-# See changed files
 git status
-
-# See actual code changes
 git diff
-
-# See staged changes
 git diff --cached
-
-# Recent commits if needed
 git log -3 --oneline
 ```
 
@@ -88,7 +84,100 @@ Based on your changes:
 Which test(s) would you like to run?
 ```
 
-## Step 1: Identify or Create Project
+## Step 1: List All Sources (Local + Cloud)
+
+Present test artifacts from both local storage and cloud (if authenticated).
+
+### List Local Projects
+
+Call `muggle_project_list` to see existing local projects.
+
+### Check Cloud Access (Optional)
+
+Call `muggle_auth_status` to check if user is authenticated.
+
+**If authenticated:**
+- Call `muggle_cloud_project_list` to list cloud projects
+- Combine with local projects in the presentation
+
+### Present Combined List
+
+```
+Available test projects:
+
+LOCAL:
+  1. [LOCAL] proj_abc - "My Web App" (http://localhost:3000)
+     - 3 use cases, 8 test cases
+  2. [LOCAL] proj_def - "Admin Portal" (http://localhost:4000)
+     - 2 use cases, 4 test cases
+
+CLOUD (logged in as user@example.com):
+  3. [CLOUD] cloud_proj_123 - "My Web App" (https://app.example.com)
+     - 5 use cases, 12 test cases
+  4. [CLOUD] cloud_proj_456 - "Marketing Site" (https://www.example.com)
+     - 3 use cases, 6 test cases
+
+Options:
+  - Select a number to use that project
+  - Type "new" to create a new project
+  - Type "pull 3" to pull cloud project #3 to local
+```
+
+### User Selection Logic
+
+| User Input | Action |
+| :--------- | :----- |
+| Number (local) | Use existing local project |
+| Number (cloud) | Prompt for localhost URL, then pull to local |
+| "new" | Create new local project |
+| "pull N" | Pull cloud project N to local |
+
+## Step 2: Pull from Cloud (If Selected)
+
+When user selects a cloud project, use case, or test case:
+
+### Prompt for Local Testing URL
+
+```
+You selected a cloud project with URL: https://app.example.com
+
+What localhost URL should be used for local testing?
+(e.g., http://localhost:3000, http://localhost:3999)
+```
+
+### Pull and Rewrite URL
+
+Call `muggle_cloud_pull_project` with:
+```
+{
+  "cloudProjectId": "<cloud_project_id>",
+  "localUrl": "<user_provided_localhost_url>"
+}
+```
+
+**What happens:**
+1. Downloads project metadata from cloud
+2. Stores `originalUrl` field with the cloud URL (e.g., `https://app.example.com`)
+3. Rewrites `url` field to localhost URL (e.g., `http://localhost:3000`)
+4. Creates local copies of use cases and test cases with same URL rewriting
+5. Tracks `cloudSource` mapping for future sync
+
+### URL Rewriting Rules
+
+| Field | Original (Cloud) | Rewritten (Local) |
+| :---- | :--------------- | :---------------- |
+| `project.url` | `https://app.example.com` | `http://localhost:3000` |
+| `project.originalUrl` | (none) | `https://app.example.com` |
+| `testCase.url` | `https://app.example.com/login` | `http://localhost:3000/login` |
+| `testCase.originalUrl` | (none) | `https://app.example.com/login` |
+
+**Path preservation:** When rewriting URLs, preserve the path portion:
+- `https://app.example.com/dashboard` → `http://localhost:3000/dashboard`
+- `https://app.example.com/users/123` → `http://localhost:3000/users/123`
+
+## Step 3: Identify or Create Project
+
+If not pulling from cloud, find or create a local project.
 
 Call `muggle_project_list` to see existing projects.
 
@@ -103,7 +192,7 @@ Call `muggle_project_list` to see existing projects.
 - `url`: The localhost URL
 - `description`: Brief description of the app
 
-## Step 2: Identify or Create Use Case(s)
+## Step 4: Identify or Create Use Case(s)
 
 Call `muggle_use_case_list` with the `projectId`.
 
@@ -125,14 +214,14 @@ Call `muggle_use_case_list` with the `projectId`.
   "projectId": "<projectId>",
   "useCase": {
     "title": "<Feature name>",
-    "userPersona": "<Who is performing this>",
-    "goal": "<What the user wants to achieve>",
-    "breakdownItems": ["<Step 1>", "<Step 2>", ...]
+    "userStory": "<As a user, I want to...>",
+    "description": "<Detailed description>",
+    "breakdownItems": [{"stepNumber": 1, "action": "...", "expected": "..."}]
   }
 }
 ```
 
-## Step 3: Identify or Create Test Case(s)
+## Step 5: Identify or Create Test Case(s)
 
 Call `muggle_test_case_list` with `projectId` and optionally `useCaseId`.
 
@@ -173,15 +262,15 @@ Run: [all impacted] [all] [select specific]?
   "testCase": {
     "title": "<Test case name>",
     "goal": "<What this test verifies>",
-    "url": "<Starting URL>",
+    "url": "<Starting URL - use localhost>",
     "precondition": "<Any setup needed>",
-    "steps": ["<Step 1>", "<Step 2>", ...],
+    "instructions": "<Step-by-step instructions>",
     "expectedResult": "<What should happen>"
   }
 }
 ```
 
-## Step 4: Generate or Replay Test Script(s)
+## Step 6: Generate or Replay Test Script(s)
 
 For each selected test case, call `muggle_test_script_list` with `projectId` and `testCaseId`.
 
@@ -234,7 +323,7 @@ When running multiple tests:
 2. **Generate new scripts after** (slower, may need user observation)
 3. Track results for each test case
 
-## Step 5: View Results
+## Step 7: View Results
 
 After execution, call `muggle_run_result_list` or `muggle_run_result_get` to show:
 - Pass/fail status
@@ -254,11 +343,11 @@ Passed: 3
 Failed: 1
 
 Results:
-  ✅ tc_001 - Login with valid credentials (2.3s)
-  ✅ tc_002 - Login with invalid password (1.8s)
-  ❌ tc_003 - Remember me functionality (3.1s)
+  [PASS] tc_001 - Login with valid credentials (2.3s)
+  [PASS] tc_002 - Login with invalid password (1.8s)
+  [FAIL] tc_003 - Remember me functionality (3.1s)
      Error: Checkbox not found on page
-  ✅ tc_005 - Password reset flow (4.2s) [newly generated]
+  [PASS] tc_005 - Password reset flow (4.2s) [newly generated]
 
 Failed test details:
   tc_003: Element '#remember-me' not found. 
@@ -277,7 +366,26 @@ Based on results:
 
 ## Example Interactions
 
-### Example 1: Test Based on Code Changes
+### Example 1: Test with Cloud Pull
+
+**User:** "Test the login feature at localhost:3999"
+
+**Agent:**
+1. `muggle_project_list` → Found 1 local project
+2. `muggle_auth_status` → Authenticated
+3. `muggle_cloud_project_list` → Found 2 cloud projects
+4. Present: "Found projects:
+   - [LOCAL] proj_abc - My App (localhost:3000)
+   - [CLOUD] cloud_123 - My App (https://app.example.com)
+   Which to use?"
+5. User: "pull the cloud one"
+6. Ask: "What localhost URL for testing?" → User: "http://localhost:3999"
+7. `muggle_cloud_pull_project` → Creates local copy with localhost URL
+8. `muggle_use_case_list` → Found "User Authentication"
+9. `muggle_test_case_list` → Found 3 test cases
+10. Run tests against localhost:3999
+
+### Example 2: Test Based on Code Changes
 
 **User:** "Test my changes"
 
@@ -297,7 +405,7 @@ Based on results:
 10. Run 4 replays, 1 generation
 11. Report summary: "4 passed, 1 new script generated"
 
-### Example 2: Test Specific Feature
+### Example 3: Create New Test
 
 **User:** "Test the login flow on my app at localhost:3000"
 
@@ -310,29 +418,16 @@ Based on results:
 6. `muggle_execute_test_generation` → Generates script
 7. Report: "Test script generated with 5 steps. Ready to replay."
 
-**User:** "Run it again"
-
-**Agent:**
-1. `muggle_test_script_list` → Found script
-2. `muggle_execute_replay` → Run the script
-3. Report results
-
-### Example 3: Re-run Failed Tests
-
-**User:** "Re-run the failed tests"
-
-**Agent:**
-1. `muggle_run_result_list` → Find recent failures
-2. Identify test cases from failed runs
-3. `muggle_execute_replay` for each
-4. Report new results
-
 ## Quick Reference
 
 | Action | Tool/Command |
 | :----- | :----------- |
 | Analyze changes | `git status`, `git diff` |
-| List projects | `muggle_project_list` |
+| List local projects | `muggle_project_list` |
+| List cloud projects | `muggle_cloud_project_list` |
+| Pull project from cloud | `muggle_cloud_pull_project` |
+| Pull use case from cloud | `muggle_cloud_pull_use_case` |
+| Pull test case from cloud | `muggle_cloud_pull_test_case` |
 | Create project | `muggle_project_create` |
 | List use cases | `muggle_use_case_list` |
 | Create use case | `muggle_use_case_save` |
@@ -346,8 +441,10 @@ Based on results:
 
 ## Notes
 
+- **Dual source:** Check both local storage and cloud for existing test artifacts.
+- **URL rewriting:** When pulling from cloud, rewrite URLs to localhost and store original URL.
 - **Change-aware:** When user says "test my changes", analyze git diff to identify impacted tests.
 - **Batch execution:** Can run multiple tests in sequence, with summary report.
-- **No publishing:** This skill focuses on local testing only. Use the `publish-to-cloud` skill for publishing.
+- **No auto-publishing:** This skill focuses on local testing only. Use `publish-to-cloud` skill separately.
 - **Reuse entities:** Always check for existing projects/use cases/test cases before creating new ones.
 - **Confirm with user:** When matches are ambiguous or multiple options exist, ask user to choose.
