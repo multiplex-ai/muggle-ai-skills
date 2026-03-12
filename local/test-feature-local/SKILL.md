@@ -33,6 +33,20 @@ List Test Scripts → Generate (if none) or Replay (if exists)
 - Target web application running (e.g., `http://localhost:3999`)
 - User describes the feature to test OR has code changes to analyze
 
+## Mandatory Result Format (Paths + IDs)
+
+For **every Local MCP tool result** you report to the user, include:
+
+1. **Result**: concise summary of pass/fail or key output
+2. **Local File Path(s)**: paths returned by MCP output
+3. **IDs**: relevant IDs (project/use case/test case/test script/run)
+4. **Path Availability**:
+   - If MCP returns path(s): mark as `reported`
+   - If path(s) are computed from IDs/input: mark as `derived`
+   - If no path can be obtained: explicitly state `path not exposed by MCP output`
+
+Never omit this section when presenting Local MCP output.
+
 ## Hard-Fail Policy (No Browser Fallback)
 
 This skill is **Local MCP only**. If Local MCP tools are unavailable or a required Local MCP step fails, **stop and fail** this workflow.
