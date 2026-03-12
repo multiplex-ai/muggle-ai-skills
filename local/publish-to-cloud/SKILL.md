@@ -29,6 +29,17 @@ Confirm Publication → Return Cloud URLs
 - Muggle AI account
 - Local project with test scripts ready to publish
 
+## Hard-Fail Policy (No Browser Fallback)
+
+This skill is **Local MCP only**. If Local MCP tools are unavailable or a required Local MCP step fails, **stop and fail** this workflow.
+
+Do **not** fall back to generic browser testing features/tools to continue execution.
+
+When failing, clearly report:
+1. Which Local MCP step/tool failed
+2. The error message
+3. What user action is needed (for example, start Local MCP, fix auth, or check local project data)
+
 ## Step 1: Check Authentication
 
 Call `muggle_auth_status` to verify login state.
@@ -352,3 +363,4 @@ Publishes: Project + all use cases + all test cases + all test scripts
 - **Scripts auto-uploaded:** Test scripts are uploaded to Firebase during generation by electron-app.
 - **Cloud ID mapping:** Local storage tracks cloud IDs for future syncs.
 - **No auto-publish:** This skill only publishes when explicitly requested.
+- **No browser fallback:** If Local MCP flow cannot proceed, fail fast with clear remediation steps.

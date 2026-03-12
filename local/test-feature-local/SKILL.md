@@ -33,6 +33,17 @@ List Test Scripts → Generate (if none) or Replay (if exists)
 - Target web application running (e.g., `http://localhost:3999`)
 - User describes the feature to test OR has code changes to analyze
 
+## Hard-Fail Policy (No Browser Fallback)
+
+This skill is **Local MCP only**. If Local MCP tools are unavailable or a required Local MCP step fails, **stop and fail** this workflow.
+
+Do **not** fall back to generic browser testing features/tools to continue execution.
+
+When failing, clearly report:
+1. Which Local MCP step/tool failed
+2. The error message
+3. What user action is needed (for example, start Local MCP, fix auth, or run local app)
+
 ## Step 0: Login (Required)
 
 **Always start by ensuring the user is authenticated.** This is mandatory before any testing can begin.
@@ -505,3 +516,4 @@ Based on results:
 - **No auto-publishing:** This skill focuses on local testing only. Use `publish-to-cloud` skill separately.
 - **Reuse entities:** Always check for existing projects/use cases/test cases before creating new ones.
 - **Confirm with user:** When matches are ambiguous or multiple options exist, ask user to choose.
+- **No browser fallback:** If Local MCP flow cannot proceed, fail fast with clear remediation steps.
